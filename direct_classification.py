@@ -1,6 +1,7 @@
 import multi_svm
 import h5py
 import numpy as np
+import timeit
 from scipy import misc
 from sklearn import svm
 from sklearn.cross_validation import KFold
@@ -11,6 +12,8 @@ from add_hog_feature import GetFaceRect, getHog
 
 
 if __name__ == "__main__":
+	start = timeit.default_timer()
+
 	hfile =  h5py.File('../Politic_meta.hdf5','r')
 	politic_label_win_loss = np.array(hfile['politic_label_win_loss'])
 	politic_label_dem_gop = np.array(hfile['politic_label_dem_gop'])
@@ -29,18 +32,24 @@ if __name__ == "__main__":
 			print k, "Done.."
 	## concatenate the features
 	features = np.concatenate((landmarks, hogs), axis=1)
+	print "Check feature shape", features.shape
 
 
 	kf = KFold(filenames.shape[0], n_folds=5)
 
+
+	## set the label to predict here
+	labels = politic_label_dem_gop
+	
 	precisions = []
 	accuracies = []
+
 	for train, test in kf:
 		print "Folding..."
 		train_features = features[train,:]
-		train_labels = politic_label_win_loss[train]
+		train_labels = labels[train]
 		test_features = features[test,:]
-		test_labels = politic_label_win_loss[test]
+		test_labels = labels[test]
 
 		clf = svm.SVC(C=1000.0)
 		clf.fit(train_features, train_labels)
@@ -57,7 +66,10 @@ if __name__ == "__main__":
 
 	print 'Mean Precision:', np.mean(precisions)
 	print 'Mean Accuracies', np.mean(accuracies)
+
+	stop = timeit.default_timer()
+	print "Train Time Used,", round(stop - start, 4)
 	# result
-	#Mean Precision: 0.764721301042
-	#Mean Accuracies 0.697691408533
+	# Mean Precision: 0.790512321089
+	# Mean Accuracies 0.697872340426
 	

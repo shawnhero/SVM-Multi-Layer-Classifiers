@@ -1,6 +1,7 @@
 ## this is for problem 3b
 import multi_svm
 import h5py
+import timeit
 import numpy as np
 from sklearn import svm
 from sklearn.metrics import confusion_matrix
@@ -10,6 +11,8 @@ import matplotlib.pyplot as plt
 from scipy import misc
 
 if __name__ == "__main__":
+	start = timeit.default_timer()
+	
 	hfile =  h5py.File('../LFW_meta.hdf5','r')
 	is_train = np.array(hfile['is_train'])
 	attributes = np.array(hfile['attribute_annotation'])
@@ -38,5 +41,15 @@ if __name__ == "__main__":
 	cfile = h5py.File('c_values.hdf5','r')
 	c_values = np.array(cfile['c'])
 
-	multi_svm.train(features[is_train==1], attributes[:,is_train==1], c_values,  get_interval=5)
+	multi_svm.train(features[is_train==1], attributes[:,is_train==1], c_values,  get_interval=3)
+
+	stop = timeit.default_timer()
+	print "Train Time Used,", round(stop - start, 4)
+
 	multi_svm.test(features[is_train==0], attributes[:, is_train==0],save=False, savename="3b_landmark_with_hogs_to_attributes")
+
+	stop2 = timeit.default_timer()
+	print "Train Time Used,", round(stop2 - stop, 4)
+
+
+	

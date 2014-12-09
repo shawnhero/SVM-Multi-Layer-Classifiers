@@ -37,6 +37,12 @@ if __name__ == "__main__":
 	cfile = h5py.File('c_values.hdf5','r')
 	c_values = np.array(cfile['c'])
 
-	multi_svm.train(landmarks[is_train==1], attributes[0:8,is_train==1], c_values,  get_interval=0.1)
-	multi_svm.test(landmarks[is_train==0], attributes[:, is_train==0],save=False, savename="3a_landmark_to_attributes_another")
-	#multi_svm.predict(landmarks[is_train==0], save=True, savename="predicts")
+	multi_svm.train(landmarks[is_train==1], attributes[:,is_train==1], c_values,  get_interval=0.1)
+	multi_svm.test(landmarks[is_train==0], attributes[:, is_train==0],save=False, savename="3a_landmark_to_attributes")#"3a_landmark_to_attributes")
+
+	## with auto_weight
+	# Mean Precision 0.566243349639
+	# Mean Accuracy 0.75853307065
+	## without auto_weight
+	# Mean Precision 0.579049434105
+	# Mean Accuracy 0.823234591151

@@ -11,6 +11,7 @@ from skimage import data, color, exposure
 import time
 from sklearn.externals import joblib
 from operator import itemgetter
+import os
 
 from multiprocessing import Process, Queue, Pipe
 
@@ -38,7 +39,7 @@ class ProcessWorker(Process):
 		self.c_value = c_value
 
 	def run(self):
-		clf = svm.SVC(C=self.c_value, class_weight ='auto')
+		clf = svm.SVC(C=self.c_value) #class_weight ='auto'
 		clf.fit(self.samples, self.labels)
 		Q.put((self.iSvm, clf))
 		print "Classifier #", self.iSvm, "Trained"
@@ -83,10 +84,14 @@ class ProcessPredict(Process):
 
 	def run(self):
 		print "Predicting Classifier #", self.iSvm
-		# clean the test samples
 		# predicted labels
-		predicted_result = self.model.predict(self.samples)
-		TQ.put([self.iSvm, predicted_result])
+		predicted_result = self.model.decision_function(self.samples)
+		#TQ.put([self.iSvm, predicted_result])
+		# write to files instead of putting to queues
+		f =  h5py.File('tmp'+str(self.iSvm)+'.hdf5','w-')
+		f.create_dataset("features", data=np.ravel(predicted_result))
+		f.close()
+
 
 
 
@@ -122,13 +127,31 @@ def collect(get_interval, csize):
 	# put the result in the queue
 	# sort list according to the index of the model
 	models = sorted(collected_models, key=itemgetter(0))
-	Q.put ( [m[1] for m in models] )
+	# put them one at a time, since there seems to be max length
+	time.sleep(3)
+	for i in range(len(models)):
+		Q.put ( models[i] )
+		print "Putting one model in the queue"
+		time.sleep(0.5)
 
 # save indicates whether to save the models
 # the results always get saved. savename indicates the filename to save
 def test(test_samples, test_attributes, save=True, savename="model_metrics"):
+	print "Begin Testing.."
 	# retrieve the models from the queue
-	models = Q.get()
+	models = []
+	while len(models)<test_attributes.shape[0]:
+		while Q.empty():
+			# wait for the queue
+			time.sleep(0.1)
+		print "Retrieving one model in the queue"
+		models.append(Q.get())
+	# sort the models
+	models = sorted(models, key=itemgetter(0))
+	# retrieve the model itsefl
+	models = [m[1] for m in models]
+	print "Models retrieved, with length", len(models)
+
 	# split the models
 	m_list = grouplen(range(len(models)), 4)
 	for mm in m_list:
@@ -166,9 +189,22 @@ def test(test_samples, test_attributes, save=True, savename="model_metrics"):
 
 # save indicates whether to save the models
 # the results always get saved. savename indicates the filename to save
-def predict(test_samples, save=True, savename="predicted_results"):
+def predict(test_samples, num_models, save=True, savename="predicted_results"):
+	print "Begin Predicting.."
 	# retrieve the models from the queue
-	models = Q.get()
+	models = []
+	while len(models)<num_models:
+		while Q.empty():
+			# wait for the queue
+			time.sleep(0.1)
+		print "Retrieving one model in the queue"
+		models.append(Q.get())
+	# sort the models
+	models = sorted(models, key=itemgetter(0))
+	# retrieve the model itsefl
+	models = [m[1] for m in models]
+	print "Models retrieved, with length", len(models)
+
 	# split the models
 	m_list = grouplen(range(len(models)), 4)
 	for mm in m_list:
@@ -180,16 +216,24 @@ def predict(test_samples, save=True, savename="predicted_results"):
 		for p in pros:
 			p.join()
 			print 'Prediction joined.'
-	# get the results
-	results = []
-	while len(results)!=len(models):
-		item = TQ.get()
-		results.append(item)
-	print '#',len(models),'results retrieved!'
-	#sort the result
-	results = sorted(results, key=itemgetter(0))
-	predicts = np.array([p[1] for p in results])
-	print "Check predicts shape,", predicts.shape
+	
+	# get the results by reading from file
+	predicts = np.empty((len(models), test_samples.shape[0]))
+	for i in range(len(models)):
+		f =  h5py.File('tmp'+str(i)+'.hdf5','r')
+		predicts[i] = np.array(f['features'])
+		#remove the file
+		os.remove('tmp'+str(i)+'.hdf5')
+
+	# results = []
+	# while len(results)!=len(models):
+	# 	item = TQ.get()
+	# 	results.append(item)
+	# print '#',len(models),'results retrieved!'
+	# #sort the result
+	# results = sorted(results, key=itemgetter(0))
+	# predicts = np.array([p[1] for p in results])
+	# print "Check predicts shape,", predicts.shape
 
 	# save the predicted results
 	if save:
